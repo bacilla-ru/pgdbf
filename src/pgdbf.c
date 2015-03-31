@@ -46,10 +46,6 @@ int main(int argc, char **argv) {
     unsigned int   dbfbatchsize;   /* How many DBF records to read at once */
     unsigned int   batchindex;     /* The offset inside the current batch of
                                     * DBF records */
-    int            skipbytes;      /* The length of the Visual FoxPro DBC in
-                                    * this file (if there is one) */
-    int            fieldarraysize; /* The length of the field descriptor
-                                    * array */
     int            fieldnum;       /* The current field beind processed */
     uint8_t        terminator;     /* Testing for terminator bytes */
 
@@ -329,37 +325,30 @@ int main(int argc, char **argv) {
         exitwitherror("Unable to read the entire DBF header", 1);
     }
 
-    if(dbfheader.signature == 0x30) {
-        /* Certain DBF files have an (empty?) 263-byte buffer after the header
-         * information.  Take that into account when calculating field counts
-         * and possibly seeking over it later. */
-        skipbytes = 263;
-    } else {
-        skipbytes = 0;
-    }
-
-    /* Calculate the number of fields in this file */
+    /* Get the size of a field entry */
     dbffieldsize = sizeof(DBFFIELD);
-    fieldarraysize = littleint16_t(dbfheader.headerlength) - sizeof(dbfheader) - skipbytes - 1;
-    if(fieldarraysize % dbffieldsize == 1) {
-        /* Some dBASE III files include an extra terminator byte after the
-         * field descriptor array.  If our calculations are one byte off,
-         * that's the cause and we have to skip the extra byte when seeking
-         * to the start of the records. */
-        skipbytes += 1;
-        fieldarraysize -= 1;
-    } else if(fieldarraysize % dbffieldsize) {
-        exitwitherror("The field array size is not an even multiple of the database field size", 0);
+    
+    /* Read the field entries */
+    fields = (DBFFIELD*)0;
+    for(fieldcount = 0; ; fieldcount++) {
+    
+    	/* Allocate space for the next field entry and read it */
+        fields = (DBFFIELD*)realloc((void*)fields, sizeof(DBFFIELD)*(fieldcount + 1));
+	if(!fields) {
+	    exitwitherror("Unable to malloc feild list", 0);
+	}
+	if(fread(&fields[fieldcount], sizeof(DBFFIELD), 1, dbffile) != 1) {
+	    exitwitherror("Unable to read field header", 0);
+	}
+	
+        /* Check for the terminator */
+	if(fields[fieldcount].name[0] == 13)
+	    break;
     }
-    fieldcount = fieldarraysize / dbffieldsize;
-
-    /* Fetch the description of each field */
-    fields = malloc(fieldarraysize);
-    if(fields == NULL) {
-        exitwitherror("Unable to malloc the field descriptions", 1);
-    }
-    if(fread(fields, dbffieldsize, fieldcount, dbffile) != fieldcount) {
-        exitwitherror("Unable to read all of the field descriptions", 1);
+    
+    /* We overshot the last field entry, so we have to rewind a bit */
+    if(fseek(dbffile, -1*sizeof(DBFFIELD), SEEK_CUR)) {
+        exitwitherror("Unable to seek in the DBF file", 1);
     }
 
     /* Keep track of PostgreSQL output parameters */
@@ -371,16 +360,8 @@ int main(int argc, char **argv) {
         pgfields[i].formatstring = NULL;
     }
 
-    /* Check for the terminator character */
-    if(fread(&terminator, 1, 1, dbffile) != 1) {
-        exitwitherror("Unable to read the terminator byte", 1);
-    }
-    if(terminator != 13) {
-        exitwitherror("Invalid terminator byte", 0);
-    }
-
     /* Skip the database container if necessary */
-    if(fseek(dbffile, skipbytes, SEEK_CUR)) {
+    if(fseek(dbffile, littleint16_t(dbfheader.headerlength) - ftell(dbffile), SEEK_CUR)) {
         exitwitherror("Unable to seek in the DBF file", 1);
     }
 
