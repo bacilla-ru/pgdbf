@@ -1,8 +1,8 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.62)
-AC_INIT([PgDBF], [0.6.2], [kirk@strauser.com])
+AC_PREREQ([2.69])
+AC_INIT([PgDBF],[0.6.2],[kirk@strauser.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADERS([config.h])
@@ -31,7 +31,7 @@ AC_FUNC_MALLOC
 AC_FUNC_MMAP
 AC_CHECK_FUNCS([munmap strchr])
 
-AC_ARG_ENABLE([iconv], AC_HELP_STRING([--disable-iconv], [do not use iconv() at all]),
+AC_ARG_ENABLE([iconv], AS_HELP_STRING([--disable-iconv],[do not use iconv() at all]),
               ac_arg_use_iconv=$enableval, ac_arg_use_iconv=yes)
 AC_ARG_ENABLE([installdocs],
 [  --enable-installdocs    install documentation],
